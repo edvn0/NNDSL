@@ -1,0 +1,33 @@
+Network {
+    Layers = [
+        Input = {
+            Size = (-1, 30, 5) 
+        }
+        Reshape = {
+            Input = (-1, 30, 5)
+            Output = (-1, 5, 30)
+        }
+        Activation = {
+            Input = (-1, 5, 3)
+            Nodes = 250
+            Function = Functions.ReLU,
+            Output = (-1, 15)
+        }
+        Final = {
+            Input = (-1, 15)
+            Function = Functions.Softmax
+            Output = (-1, 15)
+            Hooks = [&SaveEveryTenthFeedForward]
+        }
+    ]
+
+    Loss = LossFunctions.SquaredMean
+}
+
+fn SaveEveryTenthFeedForward(layer: Layer; context: NetworkContext): Void => { 
+    mut t: Integer = 10
+    const m: Integer = 15
+    if (context.Iteration mod t != 0 or context.Iteration mod m != 0) return
+    t = 20
+    return await context.Save(layer.Parameters, layer.Biases)
+}
