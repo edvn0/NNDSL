@@ -2,8 +2,11 @@
 
 #include "lexer.hpp"
 
-namespace NNDSL {
-	
-    Parser::Parser(Lexer&& lexer): tokens(lexer.lex()) { }
+namespace NNDSL::Parse {
 
-} // namespace NNDSL
+	Parser::Parser(Lex::Lexer&& lexer)
+		: tokens(lexer.lex())
+	{
+	}
+
+} // namespace NNDSL::Parse

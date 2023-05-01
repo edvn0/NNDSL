@@ -2,12 +2,12 @@
 
 #include "lexer.hpp"
 
-namespace NNDSL {
+namespace NNDSL::Lex {
 
 	static const auto keywords()
 	{
-		static const std::unordered_set<std::string> all_keywords { "Functions", "Network", "Layers", "Input", "Output", "Nodes", "Size", "Function",
-			"Loss", "LossFunctions", "return", "mod", "await", "Void", "Integer", "fn", "if", "Hooks", "const", "mut", "while" };
+		static const std::unordered_set<std::string> all_keywords { "Network", "Layers", "Input", "Output", "Nodes", "Size", "Function", "Loss",
+			"return", "mod", "await", "Void", "Integer", "fn", "if", "Hooks", "const", "mut", "while", "import", "namespace" };
 		return all_keywords;
 	}
 
@@ -92,23 +92,7 @@ namespace NNDSL {
 	std::vector<Token> Lexer::lex()
 	{
 		std::vector<Token> out;
-		auto char_token = [&](Type t, char value) {
-			Token token;
-			token.column = column++;
-			token.row = row;
-			token.token_type = t;
-			token.data = value;
-			out.push_back(token);
-		};
-		auto int_token = [&](Type t, int value) {
-			Token token;
-			token.column = column++;
-			token.row = row;
-			token.token_type = t;
-			token.data = value;
-			out.push_back(token);
-		};
-		auto string_token = [&](const std::string& value, Type t = Type::String) {
+		static auto emit_token = [&]<class T>(Type t, T value) {
 			Token token;
 			token.column = column++;
 			token.row = row;
@@ -128,87 +112,85 @@ namespace NNDSL {
 				column = 0;
 				continue;
 			}
-			if (c == '-') {
-				// We handle this in the numbers stage
-				continue;
-			}
 			if (c == '.') {
-				char_token(Type::Dot, c);
+				emit_token(Type::Dot, c);
 				continue;
 			}
 			if (c == '&') {
-				char_token(Type::Ampersand, c);
+				emit_token(Type::Ampersand, c);
 				continue;
 			}
 			if (c == ';') {
-				char_token(Type::SemiColon, c);
+				emit_token(Type::SemiColon, c);
 				continue;
 			}
 			if (c == ':') {
-				char_token(Type::Colon, c);
+				emit_token(Type::Colon, c);
 				continue;
 			}
 			if (c == '!') {
-				char_token(Type::Exclamation, c);
+				emit_token(Type::Exclamation, c);
 				continue;
 			}
 			if (c == '=') {
-				char_token(Type::Equals, c);
+				emit_token(Type::Equals, c);
 				continue;
 			}
 			if (c == '{') {
-				char_token(Type::LeftBracket, c);
+				emit_token(Type::LeftBracket, c);
 				continue;
 			}
 			if (c == '}') {
-				char_token(Type::RightBracket, c);
+				emit_token(Type::RightBracket, c);
 				continue;
 			}
 			if (c == '[') {
-				char_token(Type::LeftSquareBracket, c);
+				emit_token(Type::LeftSquareBracket, c);
 				continue;
 			}
 			if (c == ']') {
-				char_token(Type::RightSquareBracket, c);
+				emit_token(Type::RightSquareBracket, c);
 				continue;
 			}
 			if (c == '<') {
-				char_token(Type::LeftAngleBracket, c);
+				emit_token(Type::LeftAngleBracket, c);
 				continue;
 			}
 			if (c == '>') {
-				char_token(Type::RightAngleBracket, c);
+				emit_token(Type::RightAngleBracket, c);
 				continue;
 			}
 			if (c == '(') {
-				char_token(Type::LeftParenthesis, c);
+				emit_token(Type::LeftParenthesis, c);
 				continue;
 			}
 			if (c == ')') {
-				char_token(Type::RightParenthesis, c);
+				emit_token(Type::RightParenthesis, c);
 				continue;
 			}
 			if (c == ',') {
-				char_token(Type::Comma, c);
+				emit_token(Type::Comma, c);
 				continue;
 			}
-			if (is_numeric(c)) {
+			if (c == '-' || is_numeric(c)) {
+				char chosen = c;
+				if (c == '-')
+					chosen = consume();
+
 				int to_move_past = 0;
 				std::stringstream str;
-				str << c;
-				while (true) {
-					char k = peek(to_move_past++);
-					if (!is_numeric(k))
-						break;
+				str << chosen;
+				char k;
+				while ((k = peek(to_move_past++)), is_numeric(k)) {
 					str << k;
 				}
 
-				int data = stoi(str.str());
-				char back = peek(-2);
-				if (back == '-')
+				auto as_string = str.str();
+				int data = stoi(as_string);
+				if (c == '-')
 					data *= -1;
 
-				int_token(Type::Number, data);
+				emit_token(Type::Number, data);
 				move_past(to_move_past);
 
 				continue;
@@ -225,7 +207,7 @@ namespace NNDSL {
 				}
 
 				auto to_string = str.str();
-				string_token(to_string, is_keyword(to_string) ? Type::Keyword : Type::Identifier);
+				emit_token(is_keyword(to_string) ? Type::Keyword : Type::Identifier, to_string);
 				move_past(to_move_past);
 
 				continue;
@@ -244,4 +226,4 @@ namespace NNDSL {
 
 	bool Lexer::is_keyword(const std::string& string) { return keywords().contains(string); }
 
-} // namespace NNDSL
+} // namespace NNDSL::Lex

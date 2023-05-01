@@ -1,3 +1,6 @@
+import namespace LossFunctions
+import namespace Functions
+
 Network {
     Layers = [
         Input = {

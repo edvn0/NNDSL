@@ -4,21 +4,19 @@
 #include "lexer.hpp"
 #include "parser.hpp"
 
+using namespace NNDSL;
+
 auto main(int argc, char** argv) -> int
 {
-	auto read = NNDSL::IO::read_file("nndsl.txt");
+	auto read = IO::read_file("nndsl.txt");
 	std::cout << read << "\n";
-	NNDSL::Lexer lexer(read);
+	Lex::Lexer lexer(read);
 	auto tokens = lexer.lex();
-	NNDSL::Parser parser(std::move(lexer));
+	Parse::Parser parser(std::move(lexer));
 	for (const auto& token : tokens) {
-		try {
-			std::cout << token << "\n";
-		} catch (std::exception e) {
-			(void)e;
-		}
+		std::cout << token << "\n";
 	}
-    NNDSL::Interpreter interpreter(parser);
+	// NNDSL::Interpreter interpreter(parser);
 
 	return 0;
 }

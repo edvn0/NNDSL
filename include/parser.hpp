@@ -2,14 +2,14 @@
 
 #include <vector>
 
-namespace NNDSL {
+namespace NNDSL::Parse {
 
 	class Parser {
 	public:
-		explicit Parser(Lexer&&);
+		explicit Parser(Lex::Lexer&&);
 
-    private:
-        std::vector<Token> tokens;
-    };
+	private:
+		std::vector<Lex::Token> tokens;
+	};
 
-} // namespace NNDSL
+} // namespace NNDSL::Parse

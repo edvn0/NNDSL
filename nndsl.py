@@ -5,11 +5,10 @@ import shutil
 import subprocess
 import enum
 import sys
+from typing import Any, Sequence
 
-if sys.platform.startswith('win'):
-    shell = True
-else:
-    shell = False
+shell = sys.platform.startswith('win')
+current_source_dir = os.path.dirname(os.path.realpath(__file__))
 
 
 class BuildMode(enum.Enum):
@@ -22,6 +21,10 @@ class BuildMode(enum.Enum):
 class Generator(enum.Enum):
     Ninja = "Ninja"
     VisualStudio2022 = "VS"
+
+class Target(enum.Enum):
+    Library = "NNDSL"
+    Example = "NNDSLExample"
 
 
 class EnumAction(Action):
@@ -47,13 +50,13 @@ class EnumAction(Action):
 
         self._enum = enum_type
 
-    def __call__(self, parser, namespace, values, option_string=None):
+    def __call__(self, parser: ArgumentParser, namespace: Namespace, values: str | Sequence[Any] | None, option_string: str | None=None):
         # Convert value back into an Enum
         value = self._enum(values)
         setattr(namespace, self.dest, value)
 
 
-def __remove(path):
+def __remove(path: str | Path):
     """ param <path> could either be relative or absolute. """
     if os.path.isfile(path) or os.path.islink(path):
         os.remove(path)  # remove the file
@@ -66,9 +69,23 @@ def __remove(path):
 
 
 def remove_folder_in(base_folder: str, folder: str):
-    out = __remove(f"{base_folder}/{folder}")
+    folder_full_path = f"{base_folder}/{folder}"
+    if not Path(folder_full_path).exists():
+        print(f"'{folder_full_path}' did not exist")
+        return
+
+    out = __remove(folder_full_path)
     if out != 0:
         print("Could not remove folders")
+
+
+def make_symlink(file_from: str, file_to: str):
+    if Path(file_to).exists():
+        __remove(file_to)
+
+    p = Path(file_from)
+    os.symlink(p.absolute(), Path(file_to).absolute())
+    return 0
 
 
 def generate_cmake(generator: Generator, build_folder: str, build_mode: BuildMode, build_tests: bool):
@@ -82,7 +99,7 @@ def generate_cmake(generator: Generator, build_folder: str, build_mode: BuildMod
     ]
 
     builds_args = [f"-B {build_folder}",
-                   f"-S {os.path.dirname(os.path.realpath(__file__))}"]
+                   f"-S {current_source_dir}"]
 
     cmake_args = ['cmake'] + builds_args + compile_definitions
 
@@ -92,14 +109,14 @@ def generate_cmake(generator: Generator, build_folder: str, build_mode: BuildMod
         exit(out)
 
 
-def build_cmake(build_folder: str, target: str):
+def build_cmake(build_folder: str, target: Target):
     if sys.platform.startswith('win'):
         shell = True
     else:
         shell = False
 
     cmake_args = ['cmake', '--build', build_folder,
-                  '--target', target, '--parallel', "12"]
+                  '--target', target.value, '--parallel', "12"]
 
     out = subprocess.call(args=cmake_args, shell=shell)
     if out != 0:
@@ -108,11 +125,6 @@ def build_cmake(build_folder: str, target: str):
 
 
 def run_tests(build_folder: str):
-    targets = ['SceneTests', 'CoreTests',
-               'ScriptingTests', 'AssetManagerTests']
-    for target in targets:
-        build_cmake(build_folder, target)
-
     ctest_args = ['ctest', '-j10', '-C', 'Debug',
                   '--test-dir', build_folder, '--output-on-failure']
 
@@ -122,43 +134,55 @@ def run_tests(build_folder: str):
         exit(out)
 
 
-def run_app(build_folder: str):
+def run_app(build_folder: str, build_mode: BuildMode, has_build_type_inside_build_folder: bool):
     args = ['NNDSLExample.exe']
+    cwd_suffix = f'example/{build_mode.value}' if has_build_type_inside_build_folder else 'example'
+
     out = subprocess.call(args=args, shell=shell,
-                          cwd=f"{build_folder}/example/Debug")
+                          cwd=f"{build_folder}/{cwd_suffix}")
     if out != 0:
         print("Fault")
         exit(out)
 
 
 def main(args: Namespace):
-    generator: BuildMode = args.generator
-    build_folder = f"build-{args.mode.value}-{generator.value.replace(' ', '')}"
+    print(args)
+
+    generator: Generator = args.generator
+    build_mode: BuildMode = args.mode
+    build_folder = f"build-{build_mode.value}-{generator.value.replace(' ', '')}"
 
     if args.clean:
-        remove_folder_in(build_folder, 'example')
-        remove_folder_in(build_folder, f'{args.mode.value}')
+        remove_folder_in(build_folder, f'{build_mode.value}')
 
     build_folder_exists = Path(build_folder).exists()
     if not build_folder_exists or args.force_configure:
-        generate_cmake(generator, build_folder, args.mode, args.build_tests)
+        generate_cmake(generator, build_folder, build_mode, args.build_tests)
 
-    build_cmake(build_folder, args.target)
 
-    if args.build_tests and args.mode == BuildMode.Debug:
+    target: Target = args.target
+    build_cmake(build_folder, target)
+
+    if args.build_tests and build_mode == BuildMode.Debug:
         run_tests(build_folder)
 
+    has_build_type_inside_build_folder = any([Path(f"{build_folder}/{x.name}").exists() for x in BuildMode])
     if args.run:
-        run_app(build_folder)
+        run_app(build_folder, build_mode, has_build_type_inside_build_folder)
+
+    if args.generate_symlink and Path(f"{build_folder}/compile_commands.json").exists():
+        make_symlink(f"{current_source_dir}/{build_folder}/compile_commands.json", f"{current_source_dir}/compile_commands.json")
 
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('-t', '--target', default="NNDSL")
+    parser.add_argument('-t', '--target', type=Target,
+                        action=EnumAction, default=Target.Example)
     parser.add_argument('-r', "--run", action='store_true')
     parser.add_argument('-b', '--build-tests', action='store_true')
     parser.add_argument('-f', '--force-configure', action='store_true')
     parser.add_argument('-c', '--clean', action='store_true')
+    parser.add_argument('-s', '--generate-symlink', action='store_true')
     parser.add_argument('-g', '--generator', type=Generator,
                         action=EnumAction, default=Generator.Ninja)
     parser.add_argument('-m', '--mode', type=BuildMode,

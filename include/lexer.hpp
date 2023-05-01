@@ -6,7 +6,7 @@
 #include <variant>
 #include <vector>
 
-namespace NNDSL {
+namespace NNDSL::Lex {
 
 	enum class Type : std::uint8_t {
 		Character,
@@ -63,4 +63,4 @@ namespace NNDSL {
 		bool is_keyword(const std::string& string);
 	};
 
-} // namespace NNDSL
+} // namespace NNDSL::Lex

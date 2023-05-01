@@ -9,10 +9,10 @@
 namespace NNDSL::Log {
 	template <class T>
 	concept ClassName = requires(T t) {
-							{
-								T::class_name()
-								} -> std::same_as<std::string_view>;
-						};
+		{
+			T::class_name()
+		} -> std::same_as<std::string_view>;
+	};
 
 	struct ILogger {
 		virtual void log(const std::string&) = 0;
